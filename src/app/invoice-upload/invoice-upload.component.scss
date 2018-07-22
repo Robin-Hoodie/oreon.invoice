@@ -1,0 +1,19 @@
+.invoice-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.invoice-form__header {
+  text-align: center;
+}
+
+.invoice-form__submit {
+  font-weight: bold;
+  font-size: 120%;
+}
+
+.invoice-form > * {
+  margin-top: 1rem;
+  width: 50%;
+}
