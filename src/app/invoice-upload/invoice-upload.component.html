@@ -2,10 +2,12 @@
 
 <form [formGroup]="invoiceForm" (ngSubmit)="onSubmitForm()" class="invoice-form">
   <mat-form-field appearance="standard">
-    <mat-label>Choose a date [TODO VALIDATION]</mat-label>
-    <input [matDatepicker]="datePicker" matInput>
+    <mat-label>Choose a date</mat-label>
+    <input [max]="today" formControlName="date" [matDatepicker]="datePicker" matInput>
     <mat-datepicker-toggle matSuffix [for]="datePicker"></mat-datepicker-toggle>
     <mat-datepicker #datePicker></mat-datepicker>
+    <mat-error *ngIf="date.invalid && date.errors['required']">Date is required and should be in format dd/MM/yyyy</mat-error>
+    <mat-error *ngIf="date.invalid && date.errors['matDatepickerMax']">Date should not be in the future</mat-error>
   </mat-form-field>
   <mat-form-field appearance="standard">
     <mat-label>Description</mat-label>
@@ -13,10 +15,11 @@
     <mat-error>Description is required</mat-error>
   </mat-form-field>
   <mat-form-field appearance="standard">
-    <mat-label>&nbsp;Price</mat-label>
+    <mat-label>Price</mat-label>
     <input type="number" formControlName="price" matInput>
-    <span matPrefix>&euro;</span>
-    <mat-error>Price should be equal to or greater than 0</mat-error>
+    <span matPrefix>&euro;&nbsp;</span>
+    <mat-error *ngIf="price.invalid && price.errors['required']">Price is required</mat-error>
+    <mat-error *ngIf="price.invalid && price.errors['min']">Price should be equal to or greater than 0</mat-error>
   </mat-form-field>
   <input type="file" formControlName="invoice" (change)="onInvoiceUpload($event)">
   <button color="primary" mat-raised-button type="submit" class="invoice-form__submit">Save to drive</button>
