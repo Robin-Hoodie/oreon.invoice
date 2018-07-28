@@ -21,6 +21,6 @@
     <mat-error *ngIf="price.invalid && price.errors['required']">Price is required</mat-error>
     <mat-error *ngIf="price.invalid && price.errors['min']">Price should be equal to or greater than 0</mat-error>
   </mat-form-field>
-  <input type="file" formControlName="invoice" (change)="onInvoiceUpload($event)">
+  <input type="file" #fileInput formControlName="invoice" (change)="onInvoiceUpload(fileInput.files[0])" [multiple]="false">
   <button color="primary" mat-raised-button type="submit" class="invoice-form__submit">Save to drive</button>
 </form>
