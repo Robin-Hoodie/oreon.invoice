@@ -18,7 +18,7 @@ interface GoogleDriveFolder {
 })
 export class GapiService {
 
-  readonly BOUNDARY = '--4561564891651634213217';
+  readonly BOUNDARY = '-------314159265358979323846';
   readonly invoiceNumberRegex = /\d+-/;
 
   constructor(private zone: NgZone, private googleDriveConstants: GoogleDriveConfig) {}
@@ -35,7 +35,6 @@ export class GapiService {
     gapi.client.init({
       apiKey: this.googleDriveConstants.API_KEY,
       clientId: this.googleDriveConstants.CLIENT_ID,
-      discoveryDocs: this.googleDriveConstants.DISCOVERY_DOCS,
       scope: this.googleDriveConstants.SCOPES
     })
         .then(this.signIn);
@@ -50,47 +49,38 @@ export class GapiService {
   }
 
   async uploadToDrive(file: File, fileName: string, date: moment.Moment) {
-    console.log(`Filename is ${fileName}`);
-    file = new File(['hello, world'], 'myfile.txt');
-    const currentInvoicesFolderId: string = await this.getReceivingInvoicesFolderIdForYearAndQuarter(date);
-        this.readFile(file)
-            .then(base64Data => {
-              gapi.client.request({
-                path: 'upload/drive/v3/files', method: 'POST', params: {
-                  uploadType: 'multipart', parents: [ currentInvoicesFolderId ]
-                }, headers: {
-                  'Content-type': `multipart/related; boundary=${this.BOUNDARY}`, 'Content-length': file.size
-                }, body: this.formatMultipartBody(file, fileName, base64Data)
-              })
-                  .then(response => console.log('Upload success! ', response), error => console.error('Upload error! ', error));
-            });
-  }
-
-  private readFile(file: File): Promise<string> {
-    const fileReader: FileReader = new FileReader();
-    return new Promise(resolve => {
-      fileReader.readAsBinaryString(file);
-      fileReader.onload = (event: any) => resolve(btoa(fileReader.result));
+    const invoicesFolderId: string = await this.getReceivingInvoicesFolderIdForYearAndQuarter(date);
+    const base64Data = await this.encodeInBase64(file);
+    const response = await gapi.client.request({
+      path: 'upload/drive/v3/files', method: 'POST', params: {
+        uploadType: 'multipart',
+      }, headers: {
+        'Content-type': `multipart/related; boundary="${this.BOUNDARY}"`, 'Content-length': file.size
+      }, body: this.formatMultipartBody(file, fileName, base64Data, invoicesFolderId)
     });
   }
 
-  private formatMultipartBody(file: File, fileName: string, base64Data: string): string {
-    const delimiter = `\r\n--${this.BOUNDARY}\r\n`;
-    const closeDelimiter = `\r\n--${this.BOUNDARY}--`;
+  private encodeInBase64(file: File): Promise<string> {
+    const fileReader: FileReader = new FileReader();
+    fileReader.readAsBinaryString(file);
+    return new Promise(resolve => fileReader.onloadend = (event: any) => resolve(btoa(fileReader.result)));
+  }
+
+  private formatMultipartBody(file: File, fileName: string, base64Data: string, invoicesFolderId: string): string {
+    const delimiter = `--${this.BOUNDARY}`;
+    const closeDelimiter = `--${this.BOUNDARY}--`;
     const metadata = {
-      name: fileName, mimeType: file.type || 'application/octet-stream'
+      name: fileName, mimeType: file.type || 'application/octet-stream', parents: [invoicesFolderId]
     };
     const body = `
-    ${delimiter}
-    Content-Type: application/json; charset=UTF-8\r\n\r\n
-    ${JSON.stringify(metadata)}
-    ${delimiter}
-    Content-Type: ${file.type || 'application/octet-stream'}\r\n
-    Content-Transfer-Encoding: base64\r\n
-    ${base64Data}
-    ${closeDelimiter}
-    `;
-    console.log(body);
+    \n${delimiter}\
+    \nContent-Type: application/json; charset=UTF-8\
+    \n\n${JSON.stringify(metadata)}\
+    \n${delimiter}\
+    \nContent-Type: ${file.type || 'application/octet-stream'}\
+    \nContent-Transfer-Encoding: base64\`
+    \n\n${base64Data}\
+    \n${closeDelimiter}`;
     return body;
   }
 
@@ -123,15 +113,23 @@ export class GapiService {
   }
 
   async getNextInvoiceNumber(date: moment.Moment): Promise<number> {
-    const currentFolderId = await this.getReceivingInvoicesFolderIdForYearAndQuarter(date);
+    const invoicesFolderId = await this.getReceivingInvoicesFolderIdForYearAndQuarter(date);
     const response = await gapi.client.request({
       path: 'drive/v3/files', method: 'GET', params: {
-        q: `'${currentFolderId}' in parents`
+        q: `'${invoicesFolderId}' in parents`
       }
     });
     const invoices: GoogleDriveFolder[] = response.result.files;
     const invoiceNumbers: number[] = invoices.map(
-      googleDriveFolder => parseFloat(this.invoiceNumberRegex.exec(googleDriveFolder.name)[ 0 ].replace('-', '')));
+      invoice => {
+        const invoiceNumber = this.invoiceNumberRegex.exec(invoice.name);
+        if (!invoiceNumber || !invoiceNumber.length) {
+          console.error(`Found an invoice without an invoice number! ${invoice.name}`);
+          return -1;
+        } else {
+          return parseFloat(invoiceNumber[0].replace('-', ''));
+        }
+      });
     const lastInvoiceNumber = Math.max(...invoiceNumbers);
     return lastInvoiceNumber + 1;
   }
